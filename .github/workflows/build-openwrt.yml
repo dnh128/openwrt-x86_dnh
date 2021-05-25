@@ -30,7 +30,7 @@ env:
   UPLOAD_FIRMWARE: true
   UPLOAD_COWTRANSFER: false
   UPLOAD_WETRANSFER: false
-  UPLOAD_RELEASE: false
+  UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
 jobs:
@@ -67,13 +67,24 @@ jobs:
         chmod +x $DIY_P1_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
-
+        
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
+    - name: Openwrt version
+      run: |
+        cd openwrt
+        OpVersion1=$(echo "$(cat package/lean/default-settings/files/zzz-default-settings)" | grep -Po "DISTRIB_REVISION=\'\K[^\']*")
+        echo $OpVersion1
+        OpVersion2=$(date "+%Y.%m.%d"\ \compiled\ \by\ \JCNF)
+        echo $OpVersion2
+        sed -i "s/DISTRIB_REVISION=.*/DISTRIB_REVISION=\'$OpVersion1\ $OpVersion2\'\"\ \>>\ \/\etc\/\openwrt_release/" package/lean/default-settings/files/zzz-default-settings
+        echo "$(cat package/lean/default-settings/files/zzz-default-settings)" | grep -Po "DISTRIB_REVISION=\'\K[^\']*"
+        #sed -i "/CPU usage/a\                \<tr><td\ \width=\"33%\"\> 使用帮助\ <\/td><td>jcnf编译：<a href=\"https://t.me/mffjc\">\ TG频道 \</a> 和 <a href=\"https://ybfl.xyz\">\ 博客 \</a></td></tr>" package/lean/autocore/files/arm/index.htm
+    
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
@@ -188,3 +199,7 @@ jobs:
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Telegram notification
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      run: curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=${{ steps.tag.outputs.release_tag }}底包包编译完成" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
